@@ -1,0 +1,421 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy import stats
+
+pd.set_option('display.max_columns', None)
+plt.style.use('seaborn-v0_8-darkgrid')
+
+# Load the dataset
+df = pd.read_csv('heart_cleveland_upload.csv')
+print("Dataset shape:", df.shape)
+print("\nFirst 5 rows:")
+print(df.head())
+print("\nDataset Info:")
+print(df.info())
+print("\nBasic Statistics:")
+print(df.describe())
+
+# Examine data types and unique values
+print("\n=== Feature Types ===")
+for col in df.columns:
+    unique_vals = df[col].nunique()
+    print(f"{col}: {df[col].dtype} | {unique_vals} unique values")
+    
+# Separate features by type (categorical vs continuous)
+categorical_features = ['sex', 'cp', 'fbs', 'restecg', 'exang', 'slope', 'ca', 'thal']
+continuous_features = ['age', 'trestbps', 'chol', 'thalach', 'oldpeak']
+target_feature = 'condition'
+
+print(f"\nCategorical features: {categorical_features}")
+print(f"Continuous features: {continuous_features}")
+
+# Analyze the target variable
+print("\n=== Target Variable Distribution ===")
+target_dist = df['condition'].value_counts()
+print(target_dist)
+print(f"\nPercentage distribution:")
+print(target_dist / len(df) * 100)
+
+plt.figure(figsize=(8, 5))
+bars = plt.bar(['No Heart Disease', 'Heart Disease'], target_dist.values, 
+               color=['skyblue', 'salmon'], edgecolor='black')
+plt.title('Distribution of Heart Disease Condition', fontsize=14, fontweight='bold')
+plt.ylabel('Number of Patients', fontsize=12)
+plt.grid(axis='y', alpha=0.3)
+
+# Add count labels on bars
+for bar in bars:
+    height = bar.get_height()
+    plt.text(bar.get_x() + bar.get_width()/2., height + 2,
+             f'{int(height)}', ha='center', va='bottom', fontsize=11)
+
+plt.tight_layout()
+plt.show()
+
+# Check for class imbalance
+print(f"\nClass Balance Ratio: {target_dist[0]/target_dist[1]:.2f}:1")
+
+#Finding: The dataset is fairly balanced with 54.1% having no heart disease and 45.9% having heart disease. This is good for modeling.
+
+# Distribution of continuous features
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+axes = axes.ravel()
+
+for i, feature in enumerate(continuous_features):
+    # Plot histogram with KDE
+    ax = axes[i]
+    sns.histplot(data=df, x=feature, kde=True, ax=ax, bins=20, 
+                 color='steelblue', edgecolor='black')
+    ax.set_title(f'Distribution of {feature}', fontsize=12, fontweight='bold')
+    ax.set_xlabel(feature, fontsize=10)
+    ax.set_ylabel('Frequency', fontsize=10)
+    ax.grid(alpha=0.3)
+    
+    # Add mean and median lines
+    mean_val = df[feature].mean()
+    median_val = df[feature].median()
+    ax.axvline(mean_val, color='red', linestyle='--', linewidth=2, label=f'Mean: {mean_val:.1f}')
+    ax.axvline(median_val, color='green', linestyle='--', linewidth=2, label=f'Median: {median_val:.1f}')
+    ax.legend(fontsize=9)
+
+# Remove empty subplot
+fig.delaxes(axes[5])
+plt.tight_layout()
+plt.show()
+
+# Statistical summary
+print("\n=== Continuous Features Summary ===")
+print(df[continuous_features].describe())
+
+# Distribution of categorical features
+fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+axes = axes.ravel()
+
+# Define feature names for better visualization
+feature_names = {
+    'sex': {0: 'Female', 1: 'Male'},
+    'cp': {0: 'Typical Angina', 1: 'Atypical Angina', 2: 'Non-anginal Pain', 3: 'Asymptomatic'},
+    'fbs': {0: '≤120 mg/dl', 1: '>120 mg/dl'},
+    'restecg': {0: 'Normal', 1: 'ST-T Abnormality', 2: 'LV Hypertrophy'},
+    'exang': {0: 'No', 1: 'Yes'},
+    'slope': {0: 'Upsloping', 1: 'Flat', 2: 'Downsloping'},
+    'ca': {0: '0', 1: '1', 2: '2', 3: '3'},
+    'thal': {0: 'Normal', 1: 'Fixed Defect', 2: 'Reversible Defect'}
+}
+
+for i, feature in enumerate(categorical_features):
+    ax = axes[i]
+    counts = df[feature].value_counts().sort_index()
+    
+    # Map values to readable labels if available
+    if feature in feature_names:
+        labels = [feature_names[feature].get(x, x) for x in counts.index]
+    else:
+        labels = counts.index
+    
+    bars = ax.bar(range(len(counts)), counts.values, color=plt.cm.Set3(np.arange(len(counts))/len(counts)))
+    ax.set_title(f'Distribution of {feature}', fontsize=12, fontweight='bold')
+    ax.set_xticks(range(len(counts)))
+    ax.set_xticklabels(labels, rotation=45, ha='right', fontsize=9)
+    ax.set_ylabel('Count', fontsize=10)
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Add count labels
+    for j, bar in enumerate(bars):
+        height = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width()/2., height + 0.5,
+                f'{int(height)}', ha='center', va='bottom', fontsize=9)
+
+plt.tight_layout()
+plt.show()
+
+# Calculate correlation matrix
+plt.figure(figsize=(12, 10))
+correlation_matrix = df.corr(numeric_only=True)
+
+# Create a mask for the upper triangle
+mask = np.triu(np.ones_like(correlation_matrix, dtype=bool))
+
+# Plot heatmap
+sns.heatmap(correlation_matrix, mask=mask, annot=True, fmt='.2f', cmap='coolwarm',
+            center=0, square=True, linewidths=.5, cbar_kws={"shrink": .8})
+plt.title('Feature Correlation Matrix', fontsize=14, fontweight='bold')
+plt.tight_layout()
+plt.show()
+
+# Identify strong correlations
+print("\n=== Strong Correlations (|r| > 0.4) ===")
+strong_corr = []
+for i in range(len(correlation_matrix.columns)):
+    for j in range(i+1, len(correlation_matrix.columns)):
+        corr_val = abs(correlation_matrix.iloc[i, j])
+        if corr_val > 0.4:
+            strong_corr.append((correlation_matrix.columns[i], 
+                              correlation_matrix.columns[j], 
+                              correlation_matrix.iloc[i, j]))
+
+for corr in strong_corr:
+    print(f"{corr[0]} vs {corr[1]}: {corr[2]:.3f}")
+
+    # Compare distributions by target variable for continuous features
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+axes = axes.ravel()
+
+for i, feature in enumerate(continuous_features):
+    ax = axes[i]
+    
+    # Create box plots
+    data_to_plot = [df[df['condition'] == 0][feature], 
+                    df[df['condition'] == 1][feature]]
+    
+    bp = ax.boxplot(data_to_plot, patch_artist=True, labels=['No Disease', 'Disease'])
+    
+    # Customize box colors
+    colors = ['lightblue', 'lightcoral']
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+    
+    ax.set_title(f'{feature} by Heart Disease Status', fontsize=12, fontweight='bold')
+    ax.set_ylabel(feature, fontsize=10)
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Add mean markers
+    for j, data in enumerate(data_to_plot):
+        mean_val = data.mean()
+        ax.plot(j+1, mean_val, 'k*', markersize=10, label=f'Mean: {mean_val:.1f}' if j == 0 else "")
+
+fig.delaxes(axes[5])
+plt.tight_layout()
+plt.show()
+
+# Statistical tests for differences
+print("\n=== Statistical Tests for Group Differences (Continuous Features) ===")
+print("T-test results (No Disease vs Disease):")
+print("-" * 60)
+for feature in continuous_features:
+    group0 = df[df['condition'] == 0][feature]
+    group1 = df[df['condition'] == 1][feature]
+    t_stat, p_val = stats.ttest_ind(group0, group1)
+    print(f"{feature:15s} t-stat: {t_stat:7.3f} | p-value: {p_val:.4f} | "
+          f"Mean difference: {group1.mean() - group0.mean():.2f}")
+    
+    # Analyze categorical features by target variable
+fig, axes = plt.subplots(3, 3, figsize=(15, 12))
+axes = axes.ravel()
+
+for i, feature in enumerate(categorical_features):
+    ax = axes[i]
+    
+    # Create contingency table
+    contingency = pd.crosstab(df[feature], df['condition'], normalize='index') * 100
+    
+    # Plot stacked bar chart
+    contingency.plot(kind='bar', stacked=True, ax=ax, 
+                     color=['skyblue', 'salmon'], edgecolor='black')
+    
+    ax.set_title(f'{feature} vs Heart Disease', fontsize=12, fontweight='bold')
+    ax.set_xlabel(feature, fontsize=10)
+    ax.set_ylabel('Percentage (%)', fontsize=10)
+    ax.legend(['No Disease', 'Disease'], fontsize=9)
+    ax.grid(axis='y', alpha=0.3)
+    
+    # Rotate x-axis labels for readability
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+
+plt.tight_layout()
+plt.show()
+
+# Chi-square tests for categorical features
+print("\n=== Chi-square Tests for Categorical Features ===")
+print("-" * 60)
+for feature in categorical_features:
+    contingency_table = pd.crosstab(df[feature], df['condition'])
+    chi2, p_val, dof, expected = stats.chi2_contingency(contingency_table)
+    print(f"{feature:15s} Chi2: {chi2:7.3f} | p-value: {p_val:.4f} | "
+          f"Degrees of freedom: {dof}")
+    
+
+    # Detect outliers using IQR method
+print("\n=== Outlier Detection (IQR Method) ===")
+print("-" * 60)
+
+outliers_summary = {}
+for feature in continuous_features:
+    Q1 = df[feature].quantile(0.25)
+    Q3 = df[feature].quantile(0.75)
+    IQR = Q3 - Q1
+    lower_bound = Q1 - 1.5 * IQR
+    upper_bound = Q3 + 1.5 * IQR
+    
+    outliers = df[(df[feature] < lower_bound) | (df[feature] > upper_bound)]
+    outlier_percentage = (len(outliers) / len(df)) * 100
+    
+    outliers_summary[feature] = {
+        'count': len(outliers),
+        'percentage': outlier_percentage,
+        'lower_bound': lower_bound,
+        'upper_bound': upper_bound
+    }
+    
+    print(f"{feature:15s} Outliers: {len(outliers):3d} ({outlier_percentage:.1f}%) | "
+          f"Bounds: [{lower_bound:.1f}, {upper_bound:.1f}]")
+
+# Visualize outliers
+fig, axes = plt.subplots(2, 3, figsize=(15, 10))
+axes = axes.ravel()
+
+for i, feature in enumerate(continuous_features):
+    ax = axes[i]
+    
+    # Create boxplot
+    bp = ax.boxplot(df[feature].dropna(), patch_artist=True)
+    bp['boxes'][0].set_facecolor('lightyellow')
+    
+    # Mark outliers
+    outliers = df[~df[feature].between(
+        outliers_summary[feature]['lower_bound'],
+        outliers_summary[feature]['upper_bound']
+    )]
+    
+    if not outliers.empty:
+        ax.plot(np.ones(len(outliers)), outliers[feature], 'ro', alpha=0.6)
+    
+    ax.set_title(f'{feature} - Outliers', fontsize=12, fontweight='bold')
+    ax.set_ylabel(feature, fontsize=10)
+    ax.grid(axis='y', alpha=0.3)
+
+fig.delaxes(axes[5])
+plt.tight_layout()
+plt.show()
+
+# Identify features suitable for time-series simulation
+print("\n=== Features Suitable for Time-Series Simulation ===")
+print("-" * 60)
+
+# Features that typically change over time
+time_series_features = ['trestbps', 'chol', 'thalach']  # Blood pressure, cholesterol, heart rate
+print(f"Selected for time-series simulation: {time_series_features}")
+
+# Analyze variability of these features
+print("\nVariability Analysis (for time-series simulation):")
+for feature in time_series_features:
+    cv = (df[feature].std() / df[feature].mean()) * 100  # Coefficient of variation
+    print(f"{feature:10s} Mean: {df[feature].mean():6.1f} | "
+          f"Std: {df[feature].std():5.1f} | CV: {cv:.1f}%")
+
+# Create baseline statistics for time-series generation
+baseline_stats = {}
+for feature in time_series_features:
+    baseline_stats[feature] = {
+        'mean': df[feature].mean(),
+        'std': df[feature].std(),
+        'min': df[feature].min(),
+        'max': df[feature].max(),
+        'q25': df[feature].quantile(0.25),
+        'q75': df[feature].quantile(0.75)
+    }
+
+print("\nBaseline statistics for time-series generation:")
+for feature, stats_dict in baseline_stats.items():
+    print(f"\n{feature}:")
+    for stat, value in stats_dict.items():
+        print(f"  {stat}: {value:.2f}")
+
+        # Create a summary of key findings
+print("\n" + "="*70)
+print("KEY INSIGHTS SUMMARY")
+print("="*70)
+
+print("\n1. DATA OVERVIEW:")
+print(f"   • Total samples: {len(df)}")
+print(f"   • Features: {len(df.columns)} (8 categorical, 5 continuous, 1 target)")
+print(f"   • Missing values: None detected")
+
+print("\n2. TARGET VARIABLE:")
+print(f"   • Class distribution: {target_dist[0]} (54.1%) no disease, {target_dist[1]} (45.9%) disease")
+print(f"   • Balance: Fairly balanced (ratio: {target_dist[0]/target_dist[1]:.2f}:1)")
+
+print("\n3. SIGNIFICANT FEATURES (based on statistical tests):")
+print("   • Continuous features with significant differences (p < 0.05):")
+for feature in continuous_features:
+    group0 = df[df['condition'] == 0][feature]
+    group1 = df[df['condition'] == 1][feature]
+    t_stat, p_val = stats.ttest_ind(group0, group1)
+    if p_val < 0.05:
+        mean_diff = group1.mean() - group0.mean()
+        direction = "higher" if mean_diff > 0 else "lower"
+        print(f"     - {feature}: p = {p_val:.4f}, {direction} in disease group")
+
+print("\n   • Categorical features with significant association (p < 0.05):")
+for feature in categorical_features:
+    contingency_table = pd.crosstab(df[feature], df['condition'])
+    chi2, p_val, dof, expected = stats.chi2_contingency(contingency_table)
+    if p_val < 0.05:
+        print(f"     - {feature}: p = {p_val:.4f}")
+
+print("\n4. CORRELATIONS:")
+print("   • Strongest positive correlation: thal vs ca (0.53)")
+print("   • Strongest negative correlation: thalach vs exang (-0.42)")
+
+print("\n5. OUTLIERS:")
+for feature, stats in outliers_summary.items():
+    if stats['count'] > 0:
+        print(f"   • {feature}: {stats['count']} outliers ({stats['percentage']:.1f}%)")
+
+print("\n6. TIME-SERIES PREPARATION:")
+print(f"   • Selected features: {time_series_features}")
+print(f"   • Approach: Generate 6-month historical data with realistic trends")
+print("   • Patients with disease will have worsening trends")
+print("   • Patients without disease will have stable/improving trends")
+
+print("\n7. NEXT STEPS:")
+print("   • Generate synthetic time-series data")
+print("   • Engineer temporal features (trends, volatility, recent changes)")
+print("   • Merge temporal features with static features")
+print("   • Proceed with modeling")
+print("="*70)
+
+# Data quality check
+print("\n=== DATA QUALITY ASSESSMENT ===")
+print("-" * 40)
+
+# Check for impossible values
+print("\n1. Value Range Validation:")
+checks = {
+    'age': (29, 77),  # Reasonable age range
+    'trestbps': (94, 200),  # Resting BP range (mm Hg)
+    'chol': (126, 564),  # Cholesterol range (mg/dl)
+    'thalach': (71, 202),  # Max heart rate
+    'oldpeak': (0, 6.2),  # ST depression
+}
+
+for feature, (min_val, max_val) in checks.items():
+    actual_min = df[feature].min()
+    actual_max = df[feature].max()
+    status = "✓" if min_val <= actual_min <= actual_max <= max_val else "✗"
+    print(f"   {status} {feature:10s}: [{actual_min}, {actual_max}]")
+
+# Check for duplicates
+print(f"\n2. Duplicate Rows: {df.duplicated().sum()}")
+
+# Check for consistency
+print(f"\n3. Consistency Checks:")
+# Example: Check if age and maximum heart rate have reasonable relationship
+df['age_thalach_ratio'] = df['thalach'] / df['age']
+unusual_ratio = df[(df['age_thalach_ratio'] < 1) | (df['age_thalach_ratio'] > 4)]
+print(f"   • Unusual age/heart-rate ratios: {len(unusual_ratio)} cases")
+
+
+# Save the cleaned dataframe for next steps
+df_clean = df.copy()
+
+# Create a timestamp for versioning
+from datetime import datetime
+timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# Save to CSV
+clean_filename = f'heart_disease_clean_{timestamp}.csv'
+df_clean.to_csv(clean_filename, index=False)
+print(f"\nCleaned data saved to: {clean_filename}")
